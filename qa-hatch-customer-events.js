@@ -1,10 +1,10 @@
-//Initialize GTM tag
+// Initialize GTM tag
 (function (w, d, s, l, i) {
   w[l] = w[l] || [];
   w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
-  var f = d.getElementsByTagName(s)[0],
-    j = d.createElement(s),
-    dl = l != 'dataLayer' ? '&l=' + l : '';
+  const f = d.getElementsByTagName(s)[0],
+        j = d.createElement(s),
+        dl = l !== 'dataLayer' ? '&l=' + l : '';
   j.async = true;
   j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
   f.parentNode.insertBefore(j, f);
@@ -12,48 +12,25 @@
 
 console.log('🏷️ GTM-PZ5FBSW Loaded via Shopify Pixels');
 
-//subscribe to events
-// analytics.subscribe('checkout_completed', (event) => {
-//   window.dataLayer.push({
-//     event: 'checkout_completed',
-//     timestamp: event.timestamp,
-//     id: event.id,
-//     token: event.data.checkout.token,
-//     url: event.context.document.location.href,
-//     client_id: event.clientId,
-//     email: event.data.checkout.email,
-//     phone: event.data.checkout.phone,
-//     first_name: event.data.checkout.shippingAddress.firstName,
-//     last_name: event.data.checkout.shippingAddress.lastName,
-//     address1: event.data.checkout.shippingAddress.address1,
-//     address2: event.data.checkout.shippingAddress.address2,
-//     city: event.data.checkout.shippingAddress.city,
-//     country: event.data.checkout.shippingAddress.country,
-//     countryCode: event.data.checkout.shippingAddress.countryCode,
-//     province: event.data.checkout.shippingAddress.province,
-//     provinceCode: event.data.checkout.shippingAddress.provinceCode,
-//     zip: event.data.checkout.shippingAddress.zip,
-//     orderId: event.data.checkout.order.id,
-//     currency: event.data.checkout.currencyCode,
-//     subtotal: event.data.checkout.subtotalPrice.amount,
-//     shipping: event.data.checkout.shippingLine.price.amount,
-//     value: event.data.checkout.totalPrice.amount,
-//     tax: event.data.checkout.totalTax.amount,
-//   });
-// });
+// Helper function to process checkout data for ecommEvent
+function processCheckoutData(checkout) {
+  if (!checkout || !checkout.lineItems) {
+    console.error('[lib/gtm/shopify-pixel-track.js] Invalid checkout data');
+    return null;
+  }
+  return {
+    coupon: _hatch_gtm_extractCouponFromDiscountApplications({
+      discountApplications: checkout.discountApplications,
+    }),
+    discountTotal: _hatch_gtm_getTotalDiscount(checkout.discountApplications).toFixed(2),
+    items: _hatch_gtm_getItemsFromLineItems(checkout.lineItems),
+  };
+}
 
+// Subscribe to events
 analytics.subscribe('page_viewed', (evt) => {
   console.info('[lib/gtm/shopify-pixel-track.js] page_viewed');
-  // We are using the context object to get the current document
-  // Web Pixels are sandboxed and do not have access to the proper window for standard DOM access
   const domDocument = evt.context.document;
-
-  //   path: domDocument.location.pathname,
-  //   url: domDocument.location.href,
-  //   title:
-  //   referrer: domDocument.referrer,
-  //   search: domDocument.location.search,
-
   dataLayer.push({
     event: 'pageView',
     event_name: 'page_view',
@@ -66,213 +43,95 @@ analytics.subscribe('page_viewed', (evt) => {
   });
 });
 
-// RS 032924 - commenting out b/c likely a dupe of begin_checkout on hatch.co cart 
-// analytics.subscribe('checkout_started', (event) => {
-//   const checkout = event.data.checkout;
-
-//   const coupon = _hatch_gtm_extractCouponFromDiscountApplications({
-//     discountApplications: event.data.checkout.discountApplications,
-//   });
-//   const discountTotal = _hatch_gtm_getTotalDiscount(
-//     event.data.checkout.discountApplications
-//   );
-//   const products = _hatch_gtm_getProductsFromLineItems(
-//     event.data.checkout.lineItems
-//   );
-//   const items = _hatch_gtm_getItemsFromLineItems(event.data.checkout.lineItems);
-//   console.info('[lib/gtm/shopify-pixel-track.js] checkout_started');
-
-  // dataLayer.push({
-  //   event: 'ecommEvent',
-  //   event_name: 'checkout_started',
-  //   ecommerce: {
-  //     currencyCode: checkout.currencyCode,
-  //     value: checkout.totalPrice.amount.toFixed(2),
-  //     items,
-  //     discount_total: discountTotal.toFixed(2),
-  //     coupon,
-  //     order_id: checkout.order.id,
-  //     checkout_id: checkout.token,
-  //     checkout: {
-  //       actionField: {
-  //         step: 0,
-  //       },
-  //       products,
-  //     },
-  //   },
-  // });
-// });
-
 analytics.subscribe('checkout_contact_info_submitted', (event) => {
   const checkout = event.data.checkout;
+  const processedData = processCheckoutData(checkout);
+  if (!processedData) return;
 
-  const coupon = _hatch_gtm_extractCouponFromDiscountApplications({
-    discountApplications: event.data.checkout.discountApplications,
-  });
-  const discountTotal = _hatch_gtm_getTotalDiscount(
-    event.data.checkout.discountApplications
-  );
-  const products = _hatch_gtm_getProductsFromLineItems(
-    event.data.checkout.lineItems
-  );
-  const items = _hatch_gtm_getItemsFromLineItems(event.data.checkout.lineItems);
-  console.info(
-    '[lib/gtm/shopify-pixel-track.js] checkout_contact_info_submitted'
-  );
-  //   rudderanalytics.track('Checkout Step Completed', {
-  //     checkout_id: checkout.token,
+  console.info('[lib/gtm/shopify-pixel-track.js] checkout_contact_info_submitted');
   dataLayer.push({
     event: 'ecommEvent',
     event_name: 'add_contact_info',
     ecommerce: {
       currencyCode: checkout.currencyCode,
       value: checkout.totalPrice.amount.toFixed(2),
-      items,
-      discount_total: discountTotal.toFixed(2),
-      coupon,
+      items: processedData.items,
+      discount_total: processedData.discountTotal,
+      coupon: processedData.coupon,
       order_id: checkout.order.id,
-      checkout_id: checkout.token,
-      checkout: {
-        actionField: {
-          step: 1,
-        },
-        products,
-      },
     },
   });
 });
 
 analytics.subscribe('checkout_address_info_submitted', (event) => {
   const checkout = event.data.checkout;
+  const processedData = processCheckoutData(checkout);
+  if (!processedData) return;
 
-  const coupon = _hatch_gtm_extractCouponFromDiscountApplications({
-    discountApplications: event.data.checkout.discountApplications,
-  });
-  const discountTotal = _hatch_gtm_getTotalDiscount(
-    event.data.checkout.discountApplications
-  );
-  const products = _hatch_gtm_getProductsFromLineItems(
-    event.data.checkout.lineItems
-  );
-  const items = _hatch_gtm_getItemsFromLineItems(event.data.checkout.lineItems);
-  console.info(
-    '[lib/gtm/shopify-pixel-track.js] checkout_address_info_submitted'
-  );
-
+  console.info('[lib/gtm/shopify-pixel-track.js] checkout_address_info_submitted');
   dataLayer.push({
     event: 'ecommEvent',
     event_name: 'add_address_info',
     ecommerce: {
       currencyCode: checkout.currencyCode,
       value: checkout.totalPrice.amount.toFixed(2),
-      items,
-      discount_total: discountTotal.toFixed(2),
-      coupon,
+      items: processedData.items,
+      discount_total: processedData.discountTotal,
+      coupon: processedData.coupon,
       order_id: checkout.order.id,
-      checkout_id: checkout.token,
-      checkout: {
-        actionField: {
-          step: 2,
-        },
-        products,
-      },
     },
   });
 });
 
 analytics.subscribe('checkout_shipping_info_submitted', (event) => {
   const checkout = event.data.checkout;
+  const processedData = processCheckoutData(checkout);
+  if (!processedData) return;
 
-  const coupon = _hatch_gtm_extractCouponFromDiscountApplications({
-    discountApplications: event.data.checkout.discountApplications,
-  });
-  const discountTotal = _hatch_gtm_getTotalDiscount(
-    event.data.checkout.discountApplications
-  );
-  const products = _hatch_gtm_getProductsFromLineItems(
-    event.data.checkout.lineItems
-  );
-  const items = _hatch_gtm_getItemsFromLineItems(event.data.checkout.lineItems);
-  console.info(
-    '[lib/gtm/shopify-pixel-track.js] checkout_shipping_info_submitted'
-  );
-
+  console.info('[lib/gtm/shopify-pixel-track.js] checkout_shipping_info_submitted');
   dataLayer.push({
     event: 'ecommEvent',
     event_name: 'add_shipping_info',
     ecommerce: {
       currencyCode: checkout.currencyCode,
       value: checkout.totalPrice.amount.toFixed(2),
-      items,
-      discount_total: discountTotal.toFixed(2),
-      coupon,
+      items: processedData.items,
+      discount_total: processedData.discountTotal,
+      coupon: processedData.coupon,
       order_id: checkout.order.id,
-      checkout_id: checkout.token,
-      checkout: {
-        actionField: {
-          step: 3,
-        },
-        products,
-      },
     },
   });
 });
 
 analytics.subscribe('payment_info_submitted', (event) => {
   const checkout = event.data.checkout;
+  const processedData = processCheckoutData(checkout);
+  if (!processedData) return;
 
-  const coupon = _hatch_gtm_extractCouponFromDiscountApplications({
-    discountApplications: event.data.checkout.discountApplications,
-  });
-  const discountTotal = _hatch_gtm_getTotalDiscount(
-    event.data.checkout.discountApplications
-  );
-  const products = _hatch_gtm_getProductsFromLineItems(
-    event.data.checkout.lineItems
-  );
-  const items = _hatch_gtm_getItemsFromLineItems(event.data.checkout.lineItems);
   console.info('[lib/gtm/shopify-pixel-track.js] payment_info_submitted');
-
   dataLayer.push({
     event: 'ecommEvent',
     event_name: 'add_payment_info',
     ecommerce: {
       currencyCode: checkout.currencyCode,
       value: checkout.totalPrice.amount.toFixed(2),
-      items,
-      discount_total: discountTotal.toFixed(2),
-      coupon,
+      items: processedData.items,
+      discount_total: processedData.discountTotal,
+      coupon: processedData.coupon,
       order_id: checkout.order.id,
-      checkout_id: checkout.token,
-      checkout: {
-        actionField: {
-          step: 4,
-        },
-        products,
-      },
     },
   });
 });
 
 analytics.subscribe('checkout_completed', async (event) => {
   const checkout = event.data.checkout;
+  const processedData = processCheckoutData(checkout);
+  if (!processedData) return;
 
-  const coupon = _hatch_gtm_extractCouponFromDiscountApplications({
-    discountApplications: event.data.checkout.discountApplications,
-  });
-  const discountTotal = _hatch_gtm_getTotalDiscount(
-    event.data.checkout.discountApplications
-  );
-  const products = _hatch_gtm_getProductsFromLineItems(
-    event.data.checkout.lineItems
-  );
-  const items = _hatch_gtm_getItemsFromLineItems(event.data.checkout.lineItems);
   console.info('[lib/gtm/shopify-pixel-track.js] checkout_completed');
-
   console.log('checkout_completed in GTM shopify pixels');
-
-  console.log('email_hashed:'+ await hashEmail(checkout.email));
-  console.log('phone_hashed:'+ await hashPhone(checkout.phone));
+  console.log('email_hashed:' + await hashEmail(checkout.email));
+  console.log('phone_hashed:' + await hashPhone(checkout.phone));
 
   dataLayer.push({
     event: 'ecommEvent',
@@ -285,12 +144,10 @@ analytics.subscribe('checkout_completed', async (event) => {
       currencyCode: checkout.currencyCode,
       value: checkout.totalPrice.amount.toFixed(2),
       order_id: checkout.order.id,
-      checkout_id: checkout.token,
-      items,
+      items: processedData.items,
       quantity_total: checkout.lineItems.length,
-      discount_total: discountTotal.toFixed(2),
-      coupon,
-      // name thru zip are req for Facebook and Google Ads enhanced conversions
+      discount_total: processedData.discountTotal,
+      coupon: processedData.coupon,
       first_name: checkout.shippingAddress.firstName,
       last_name: checkout.shippingAddress.lastName,
       phone: checkout.phone,
@@ -298,21 +155,12 @@ analytics.subscribe('checkout_completed', async (event) => {
       state: checkout.shippingAddress.province,
       country: checkout.shippingAddress.country,
       zip: checkout.shippingAddress.zip,
-      checkout: {
-        actionField: {
-          step: 5,
-        },
-        products,
-      },
     },
-  });  
+  });
 });
 
 // Helper functions
-
-function _hatch_gtm_extractCouponFromDiscountApplications({
-  discountApplications,
-}) {
+function _hatch_gtm_extractCouponFromDiscountApplications({ discountApplications }) {
   return (discountApplications ?? []).map((d) => d.title).join(',');
 }
 
@@ -320,7 +168,6 @@ function _hatch_gtm_getItemsFromLineItems(lineItems) {
   return lineItems.map(({ variant, quantity }) => {
     const { product } = variant;
     const hasVariantTitle = variant.title && variant.title !== 'Default Title';
-    // const handle = product.url.replace('/products/', '');
     return {
       ['item_id']: variant.sku,
       ['item_name']: product.title,
@@ -328,7 +175,7 @@ function _hatch_gtm_getItemsFromLineItems(lineItems) {
       ['item_brand']: 'Hatch',
       ['item_category']: _hatch_gtm_getProductCategory(product.title),
       ['item_variant']: hasVariantTitle ? variant.title : '',
-      price: variant.price.amount.toFixed(2), // Return a string
+      price: variant.price.amount.toFixed(2),
       quantity,
     };
   });
@@ -339,28 +186,6 @@ function _hatch_gtm_getTotalDiscount(discountApplications) {
     (acc, { value: { amount } }) => acc + amount,
     0
   );
-}
-
-function _hatch_gtm_getProductsFromLineItems(lineItems) {
-  return lineItems.map(({ variant, discountAllocations, quantity }) => {
-    const { product } = variant;
-    const hasVariantTitle = variant.title && variant.title !== 'Default Title';
-    // const handle = product.url.replace('/products/', '');
-    return {
-      name: product.title,
-      id: variant.sku,
-      price: variant.price.amount.toFixed(2), // Return a string
-      currencyCode: variant.price.currencyCode,
-      brand: 'Hatch',
-      quantity,
-      variant: hasVariantTitle ? variant.title : '',
-      category: _hatch_gtm_getProductCategory(product.title),
-      discount: discountAllocations.reduce(
-        (acc, { amount: { amount } }) => acc + amount,
-        0
-      ),
-    };
-  });
 }
 
 function _hatch_gtm_getProductCategory(title) {
